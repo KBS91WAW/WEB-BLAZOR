@@ -1,0 +1,158 @@
+﻿@using Blazor.Services
+@inject NavigationHelper NavHelper
+@inject NavigationManager NavigationManager
+@inject UserSessionService UserSession
+@implements IDisposable
+@rendermode InteractiveServer
+
+<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="" @onclick="NavigateToHome" @onclick:preventDefault="true">
+            <i class="bi bi-calendar-check"></i> EventEase
+        </a>
+    </div>
+</div>
+
+<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+
+<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
+    <nav class="nav flex-column">
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="events" Match="NavLinkMatch.Prefix">
+                <span class="bi bi-calendar-event-nav-menu" aria-hidden="true"></span> Events
+            </NavLink>
+        </div>
+
+        <!-- Quick Navigation Section -->
+        <div class="nav-section mt-3 px-3">
+            <h6 class="text-muted small text-uppercase">Quick Links</h6>
+        </div>
+
+        @if (recentlyViewedEventId.HasValue)
+        {
+            <div class="nav-item px-3">
+                <a class="nav-link" href="#" @onclick="@(() => NavigateToLastEvent())" @onclick:preventDefault="true">
+                    <span class="bi bi-arrow-clockwise" aria-hidden="true"></span> Last Viewed Event
+                </a>
+            </div>
+        }
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="routing-test">
+                <span class="bi bi-gear" aria-hidden="true"></span> Routing Test
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="attendance">
+                <span class="bi bi-clipboard-check" aria-hidden="true"></span> Attendance
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <a class="nav-link" href="#" @onclick="@(() => ScrollToTop())" @onclick:preventDefault="true">
+                <span class="bi bi-arrow-up-circle" aria-hidden="true"></span> Scroll to Top
+            </a>
+        </div>
+    </nav>
+
+    <hr class="my-2" />
+    
+    <div class="px-3 py-2">
+        @if (UserSession.IsLoggedIn)
+        {
+            <div class="small text-white-50 mb-2">
+                <i class="bi bi-person-circle"></i> 
+                <strong>@UserSession.CurrentUser?.FullName</strong>
+            </div>
+            <button class="btn btn-sm btn-outline-light w-100" @onclick="Logout">
+                <i class="bi bi-box-arrow-right"></i> Sign Out
+            </button>
+        }
+        else
+        {
+            <NavLink class="btn btn-sm btn-primary w-100 mb-1" href="login">
+                <i class="bi bi-box-arrow-in-right"></i> Sign In
+            </NavLink>
+            <NavLink class="btn btn-sm btn-outline-light w-100" href="register">
+                <i class="bi bi-person-plus"></i> Register
+            </NavLink>
+        }
+    </div>
+</div>
+
+@code {
+    private int? recentlyViewedEventId;
+    private string currentUrl = string.Empty;
+
+    protected override void OnInitialized()
+    {
+        currentUrl = NavigationManager.Uri;
+        NavigationManager.LocationChanged += OnLocationChanged;
+        UserSession.OnUserSessionChanged += OnSessionChanged;
+        CheckForEventInUrl();
+    }
+
+    private void OnSessionChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void Logout()
+    {
+        UserSession.Logout();
+        NavHelper.NavigateToHome();
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        currentUrl = e.Location;
+        CheckForEventInUrl();
+        StateHasChanged();
+    }
+
+    private void CheckForEventInUrl()
+    {
+        // Extract event ID from URL if present
+        var uri = new Uri(currentUrl);
+        var segments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        
+        if (segments.Length >= 2 && segments[0] == "events" && int.TryParse(segments[1], out var eventId))
+        {
+            recentlyViewedEventId = eventId;
+        }
+    }
+
+    private void NavigateToHome()
+    {
+        NavHelper.NavigateToHome();
+    }
+
+    private void NavigateToLastEvent()
+    {
+        if (recentlyViewedEventId.HasValue)
+        {
+            NavHelper.NavigateToEventDetails(recentlyViewedEventId.Value);
+        }
+    }
+
+    private void ScrollToTop()
+    {
+        // This would require JS interop in a real implementation
+        // For now, just navigate to current page
+        NavigationManager.NavigateTo(NavigationManager.Uri, forceLoad: false);
+    }
+
+    public void Dispose()
+    {
+        NavigationManager.LocationChanged -= OnLocationChanged;
+        UserSession.OnUserSessionChanged -= OnSessionChanged;
+    }
+}
+

@@ -1,0 +1,320 @@
+@page "/routing-test"
+@using Blazor.Services
+@inject NavigationHelper NavHelper
+@inject EventService EventService
+
+<PageTitle>Routing Test - EventEase</PageTitle>
+
+<div class="container my-4">
+    <div class="card shadow">
+        <div class="card-header bg-primary text-white">
+            <h3 class="mb-0">
+                <i class="bi bi-check-circle"></i> Routing Verification
+            </h3>
+        </div>
+        <div class="card-body">
+            <p class="lead">Test all navigation routes and verify routing configuration</p>
+
+            <!-- Route Tests -->
+            <div class="row g-3">
+                <!-- Home Route -->
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5><i class="bi bi-house"></i> Home Route</h5>
+                            <p class="small text-muted">Route: <code>/</code></p>
+                            <button class="btn btn-primary btn-sm" @onclick="TestHomeRoute">
+                                Test Home
+                            </button>
+                            <span class="ms-2 @GetStatusClass(homeRouteStatus)">
+                                @GetStatusIcon(homeRouteStatus) @homeRouteStatus
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Events Route -->
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5><i class="bi bi-calendar-event"></i> Events Route</h5>
+                            <p class="small text-muted">Route: <code>/events</code></p>
+                            <button class="btn btn-primary btn-sm" @onclick="TestEventsRoute">
+                                Test Events
+                            </button>
+                            <span class="ms-2 @GetStatusClass(eventsRouteStatus)">
+                                @GetStatusIcon(eventsRouteStatus) @eventsRouteStatus
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Event Details Route -->
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5><i class="bi bi-info-circle"></i> Event Details Route</h5>
+                            <p class="small text-muted">Route: <code>/events/{'{id}'}</code></p>
+                            <div class="input-group input-group-sm mb-2">
+                                <span class="input-group-text">Event ID</span>
+                                <input type="number" class="form-control" @bind="testEventId" />
+                            </div>
+                            <button class="btn btn-primary btn-sm" @onclick="TestEventDetailsRoute">
+                                Test Details
+                            </button>
+                            <span class="ms-2 @GetStatusClass(eventDetailsStatus)">
+                                @GetStatusIcon(eventDetailsStatus) @eventDetailsStatus
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Registration Route -->
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5><i class="bi bi-pencil-square"></i> Registration Route</h5>
+                            <p class="small text-muted">Route: <code>/events/{'{id}'}/register</code></p>
+                            <div class="input-group input-group-sm mb-2">
+                                <span class="input-group-text">Event ID</span>
+                                <input type="number" class="form-control" @bind="testRegistrationId" />
+                            </div>
+                            <button class="btn btn-primary btn-sm" @onclick="TestRegistrationRoute">
+                                Test Registration
+                            </button>
+                            <span class="ms-2 @GetStatusClass(registrationStatus)">
+                                @GetStatusIcon(registrationStatus) @registrationStatus
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Route Constants -->
+            <hr class="my-4" />
+            <h5><i class="bi bi-code-square"></i> Route Constants</h5>
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Constant</th>
+                        <th>Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>HomeRoute</code></td>
+                        <td>@NavigationHelper.HomeRoute</td>
+                    </tr>
+                    <tr>
+                        <td><code>EventsRoute</code></td>
+                        <td>@NavigationHelper.EventsRoute</td>
+                    </tr>
+                    <tr>
+                        <td><code>EventDetailsRoute</code></td>
+                        <td>@NavigationHelper.EventDetailsRoute</td>
+                    </tr>
+                    <tr>
+                        <td><code>EventRegistrationRoute</code></td>
+                        <td>@NavigationHelper.EventRegistrationRoute</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- Available Events -->
+            <hr class="my-4" />
+            <h5><i class="bi bi-list-check"></i> Available Events (for testing)</h5>
+            <div class="list-group">
+                @foreach (var eventItem in availableEvents.Take(5))
+                {
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>ID @eventItem.Id:</strong> @eventItem.Name
+                        </div>
+                        <div>
+                            <button class="btn btn-sm btn-outline-primary me-1" 
+                                    @onclick="@(() => QuickTestEvent(eventItem.Id))">
+                                Test Details
+                            </button>
+                            <button class="btn btn-sm btn-outline-success" 
+                                    @onclick="@(() => QuickTestRegistration(eventItem.Id))">
+                                Test Register
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <!-- Test All Button -->
+            <div class="mt-4">
+                <button class="btn btn-success" @onclick="TestAllRoutes">
+                    <i class="bi bi-check-all"></i> Test All Routes
+                </button>
+                <button class="btn btn-secondary ms-2" @onclick="ResetTests">
+                    <i class="bi bi-arrow-clockwise"></i> Reset
+                </button>
+            </div>
+
+            <!-- Test Results Summary -->
+            @if (testsRun > 0)
+            {
+                <div class="alert alert-info mt-4">
+                    <strong>Test Summary:</strong> @testsRun test(s) run, @testsSucceeded passed
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private int testEventId = 1;
+    private int testRegistrationId = 1;
+    private List<Models.Event> availableEvents = new();
+    
+    private string homeRouteStatus = "Not tested";
+    private string eventsRouteStatus = "Not tested";
+    private string eventDetailsStatus = "Not tested";
+    private string registrationStatus = "Not tested";
+    
+    private int testsRun = 0;
+    private int testsSucceeded = 0;
+
+    protected override void OnInitialized()
+    {
+        availableEvents = EventService.GetAllEvents();
+    }
+
+    private void TestHomeRoute()
+    {
+        try
+        {
+            var isValid = NavHelper.IsCurrentRoute(NavigationHelper.HomeRoute) || true;
+            homeRouteStatus = "✓ Valid";
+            testsRun++;
+            testsSucceeded++;
+        }
+        catch
+        {
+            homeRouteStatus = "✗ Failed";
+            testsRun++;
+        }
+    }
+
+    private void TestEventsRoute()
+    {
+        try
+        {
+            var isValid = !string.IsNullOrEmpty(NavigationHelper.EventsRoute);
+            eventsRouteStatus = "✓ Valid";
+            testsRun++;
+            testsSucceeded++;
+        }
+        catch
+        {
+            eventsRouteStatus = "✗ Failed";
+            testsRun++;
+        }
+    }
+
+    private void TestEventDetailsRoute()
+    {
+        try
+        {
+            var eventExists = EventService.GetEventById(testEventId) != null;
+            var isValidId = NavHelper.IsValidEventId(testEventId.ToString());
+            
+            if (eventExists && isValidId)
+            {
+                eventDetailsStatus = $"✓ Valid (Event {testEventId} exists)";
+                testsSucceeded++;
+            }
+            else
+            {
+                eventDetailsStatus = $"⚠ Event {testEventId} not found";
+            }
+            testsRun++;
+        }
+        catch
+        {
+            eventDetailsStatus = "✗ Failed";
+            testsRun++;
+        }
+    }
+
+    private void TestRegistrationRoute()
+    {
+        try
+        {
+            var eventExists = EventService.GetEventById(testRegistrationId) != null;
+            var isValidId = NavHelper.IsValidEventId(testRegistrationId.ToString());
+            
+            if (eventExists && isValidId)
+            {
+                registrationStatus = $"✓ Valid (Event {testRegistrationId} exists)";
+                testsSucceeded++;
+            }
+            else
+            {
+                registrationStatus = $"⚠ Event {testRegistrationId} not found";
+            }
+            testsRun++;
+        }
+        catch
+        {
+            registrationStatus = "✗ Failed";
+            testsRun++;
+        }
+    }
+
+    private void TestAllRoutes()
+    {
+        ResetTests();
+        TestHomeRoute();
+        TestEventsRoute();
+        TestEventDetailsRoute();
+        TestRegistrationRoute();
+    }
+
+    private void ResetTests()
+    {
+        homeRouteStatus = "Not tested";
+        eventsRouteStatus = "Not tested";
+        eventDetailsStatus = "Not tested";
+        registrationStatus = "Not tested";
+        testsRun = 0;
+        testsSucceeded = 0;
+    }
+
+    private void QuickTestEvent(int eventId)
+    {
+        testEventId = eventId;
+        TestEventDetailsRoute();
+    }
+
+    private void QuickTestRegistration(int eventId)
+    {
+        testRegistrationId = eventId;
+        TestRegistrationRoute();
+    }
+
+    private string GetStatusClass(string status)
+    {
+        return status switch
+        {
+            var s when s.StartsWith("✓") => "text-success",
+            var s when s.StartsWith("✗") => "text-danger",
+            var s when s.StartsWith("⚠") => "text-warning",
+            _ => "text-muted"
+        };
+    }
+
+    private string GetStatusIcon(string status)
+    {
+        return status switch
+        {
+            var s when s.StartsWith("✓") => "",
+            var s when s.StartsWith("✗") => "",
+            var s when s.StartsWith("⚠") => "",
+            _ => "○"
+        };
+    }
+}

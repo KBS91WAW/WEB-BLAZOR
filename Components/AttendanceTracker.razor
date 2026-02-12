@@ -1,0 +1,245 @@
+@using Blazor.Models
+@using Blazor.Services
+@inject AttendanceService AttendanceService
+@inject EventService EventService
+@inject UserSessionService UserSession
+@implements IDisposable
+@rendermode InteractiveServer
+
+<div class="card shadow-sm @CssClass">
+    <div class="card-header @(ShowCompact ? "py-2" : "")">
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="bi bi-clipboard-check"></i> 
+                @(EventId.HasValue ? "Event Attendance" : "Attendance Overview")
+            </h5>
+            @if (ShowRefreshButton)
+            {
+                <button class="btn btn-sm btn-outline-secondary" @onclick="RefreshData">
+                    <i class="bi bi-arrow-clockwise"></i>
+                </button>
+            }
+        </div>
+    </div>
+    <div class="card-body @(ShowCompact ? "py-2" : "")">
+        @if (isLoading)
+        {
+            <div class="text-center py-3">
+                <div class="spinner-border spinner-border-sm text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        }
+        else if (EventId.HasValue)
+        {
+            @* Event-specific attendance *@
+            <div class="row mb-3">
+                <div class="col-6">
+                    <div class="text-center p-3 bg-light rounded">
+                        <h3 class="mb-0 text-primary">@registeredCount</h3>
+                        <small class="text-muted">Registered</small>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="text-center p-3 bg-light rounded">
+                        <h3 class="mb-0 text-success">@checkedInCount</h3>
+                        <small class="text-muted">Checked In</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <div class="d-flex justify-content-between mb-1">
+                    <small><strong>Attendance Rate</strong></small>
+                    <small><strong>@attendanceRate%</strong></small>
+                </div>
+                <div class="progress" style="height: 20px;">
+                    <div class="progress-bar @GetProgressBarClass(attendanceRate)" 
+                         role="progressbar" 
+                         style="width: @attendanceRate%">
+                        @attendanceRate%
+                    </div>
+                </div>
+            </div>
+
+            @if (ShowAttendeeList && attendanceRecords.Any())
+            {
+                <hr />
+                <h6>Attendee List (@attendanceRecords.Count)</h6>
+                <div class="list-group list-group-flush" style="max-height: 400px; overflow-y: auto;">
+                    @foreach (var record in attendanceRecords)
+                    {
+                        <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                            <div>
+                                <strong>@record.User?.FullName</strong>
+                                <br/>
+                                <small class="text-muted">@record.User?.Email</small>
+                                @if (!string.IsNullOrEmpty(record.Notes))
+                                {
+                                    <br/>
+                                    <small><i class="bi bi-stickies"></i> @record.Notes</small>
+                                }
+                            </div>
+                            <div class="text-end">
+                                @if (record.IsCheckedIn)
+                                {
+                                    <span class="badge bg-success">
+                                        <i class="bi bi-check-circle"></i> Checked In
+                                    </span>
+                                    <br/>
+                                    <small class="text-muted">@record.CheckedInAt?.ToString("h:mm tt")</small>
+                                }
+                                else if (AllowCheckIn)
+                                {
+                                    <button class="btn btn-sm btn-outline-success" 
+                                            @onclick="() => CheckInAttendee(record.Id)">
+                                        <i class="bi bi-check-circle"></i> Check In
+                                    </button>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary">Registered</span>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        }
+        else
+        {
+            @* Overall statistics *@
+            <div class="row g-3 mb-3">
+                <div class="col-6 col-md-3">
+                    <div class="text-center p-2 bg-light rounded">
+                        <h4 class="mb-0 text-primary">@statistics.TotalRegistrations</h4>
+                        <small class="text-muted">Total Registrations</small>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="text-center p-2 bg-light rounded">
+                        <h4 class="mb-0 text-success">@statistics.TotalCheckedIn</h4>
+                        <small class="text-muted">Checked In</small>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="text-center p-2 bg-light rounded">
+                        <h4 class="mb-0 text-info">@statistics.UniqueUsers</h4>
+                        <small class="text-muted">Unique Users</small>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="text-center p-2 bg-light rounded">
+                        <h4 class="mb-0 text-warning">@statistics.UniqueEvents</h4>
+                        <small class="text-muted">Events</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="alert alert-info mb-0">
+                <i class="bi bi-info-circle"></i>
+                Overall attendance rate: <strong>@statistics.OverallAttendanceRate%</strong>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public int? EventId { get; set; }
+    [Parameter] public bool ShowAttendeeList { get; set; } = true;
+    [Parameter] public bool AllowCheckIn { get; set; } = false;
+    [Parameter] public bool ShowRefreshButton { get; set; } = true;
+    [Parameter] public bool ShowCompact { get; set; } = false;
+    [Parameter] public string CssClass { get; set; } = string.Empty;
+    [Parameter] public EventCallback OnAttendanceChanged { get; set; }
+
+    private List<AttendanceRecord> attendanceRecords = new();
+    private AttendanceStatistics statistics = new();
+    private int registeredCount = 0;
+    private int checkedInCount = 0;
+    private double attendanceRate = 0;
+    private bool isLoading = false;
+
+    protected override void OnInitialized()
+    {
+        LoadData();
+        AttendanceService.OnAttendanceChanged += HandleAttendanceChanged;
+    }
+
+    protected override void OnParametersSet()
+    {
+        LoadData();
+    }
+
+    private void LoadData()
+    {
+        if (EventId.HasValue)
+        {
+            attendanceRecords = AttendanceService.GetAttendanceByEvent(EventId.Value);
+            registeredCount = AttendanceService.GetRegisteredCount(EventId.Value);
+            checkedInCount = AttendanceService.GetCheckedInCount(EventId.Value);
+            attendanceRate = AttendanceService.GetAttendanceRate(EventId.Value);
+            
+            // Populate User and Event data
+            foreach (var record in attendanceRecords)
+            {
+                if (record.User == null)
+                {
+                    record.User = UserSession.GetUserById(record.UserId);
+                }
+                if (record.Event == null)
+                {
+                    record.Event = EventService.GetEventById(record.EventId);
+                }
+            }
+        }
+        else
+        {
+            statistics = AttendanceService.GetStatistics();
+        }
+    }
+
+    private async Task RefreshData()
+    {
+        isLoading = true;
+        await Task.Delay(500); // Simulate refresh delay
+        LoadData();
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    private void CheckInAttendee(int attendanceId)
+    {
+        if (AttendanceService.CheckIn(attendanceId))
+        {
+            LoadData();
+            OnAttendanceChanged.InvokeAsync();
+            StateHasChanged();
+        }
+    }
+
+    private void HandleAttendanceChanged()
+    {
+        InvokeAsync(() =>
+        {
+            LoadData();
+            StateHasChanged();
+        });
+    }
+
+    private string GetProgressBarClass(double rate)
+    {
+        return rate switch
+        {
+            >= 80 => "bg-success",
+            >= 60 => "bg-info",
+            >= 40 => "bg-warning",
+            _ => "bg-danger"
+        };
+    }
+
+    public void Dispose()
+    {
+        AttendanceService.OnAttendanceChanged -= HandleAttendanceChanged;
+    }
+}

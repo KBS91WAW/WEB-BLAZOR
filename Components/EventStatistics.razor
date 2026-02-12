@@ -1,0 +1,123 @@
+@using Blazor.Models
+@using Blazor.Services
+@inject EventService EventService
+@implements IDisposable
+@rendermode InteractiveServer
+
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <h5 class="card-title mb-3">
+            <i class="bi bi-graph-up"></i> Live Event Statistics
+        </h5>
+        
+        <div class="row text-center">
+            <div class="col-md-3 mb-3">
+                <div class="stat-card p-3 bg-primary bg-opacity-10 rounded">
+                    <h3 class="mb-0 text-primary">@TotalEvents</h3>
+                    <small class="text-muted">Total Events</small>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="stat-card p-3 bg-success bg-opacity-10 rounded">
+                    <h3 class="mb-0 text-success">@AvailableEvents</h3>
+                    <small class="text-muted">Available</small>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="stat-card p-3 bg-info bg-opacity-10 rounded">
+                    <h3 class="mb-0 text-info">@TotalAttendees</h3>
+                    <small class="text-muted">Total Attendees</small>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="stat-card p-3 bg-warning bg-opacity-10 rounded">
+                    <h3 class="mb-0 text-warning">@AverageCapacity%</h3>
+                    <small class="text-muted">Avg. Capacity</small>
+                </div>
+            </div>
+        </div>
+
+        @if (ShowCategoryBreakdown)
+        {
+            <hr />
+            <h6 class="mb-3">Events by Category</h6>
+            <div class="row">
+                @foreach (var category in CategoryStats)
+                {
+                    <div class="col-md-6 mb-2">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="small">@category.Key</span>
+                            <span class="badge bg-secondary">@category.Value</span>
+                        </div>
+                        <div class="progress" style="height: 8px;">
+                            <div class="progress-bar" 
+                                 style="width: @(((double)category.Value / TotalEvents) * 100)%">
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        <div class="mt-3 text-end">
+            <small class="text-muted">
+                <i class="bi bi-arrow-clockwise"></i> 
+                Last updated: @LastUpdateTime.ToString("HH:mm:ss")
+            </small>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public bool ShowCategoryBreakdown { get; set; } = true;
+
+    [Parameter]
+    public int RefreshInterval { get; set; } = 5000; // milliseconds
+
+    private int TotalEvents;
+    private int AvailableEvents;
+    private int TotalAttendees;
+    private int AverageCapacity;
+    private Dictionary<string, int> CategoryStats = new();
+    private DateTime LastUpdateTime = DateTime.Now;
+    private System.Threading.Timer? _timer;
+
+    protected override void OnInitialized()
+    {
+        UpdateStatistics();
+        
+        // Set up timer for live updates
+        _timer = new System.Threading.Timer(async _ =>
+        {
+            UpdateStatistics();
+            await InvokeAsync(StateHasChanged);
+        }, null, RefreshInterval, RefreshInterval);
+    }
+
+    private void UpdateStatistics()
+    {
+        var events = EventService.GetAllEvents();
+        
+        TotalEvents = events.Count;
+        AvailableEvents = events.Count(e => e.RegisteredAttendees < e.Capacity);
+        TotalAttendees = events.Sum(e => e.RegisteredAttendees);
+        
+        if (events.Any())
+        {
+            AverageCapacity = (int)(events.Average(e => 
+                ((double)e.RegisteredAttendees / e.Capacity) * 100));
+        }
+
+        CategoryStats = events
+            .GroupBy(e => e.Category)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        LastUpdateTime = DateTime.Now;
+    }
+
+    public void Dispose()
+    {
+        _timer?.Dispose();
+    }
+}

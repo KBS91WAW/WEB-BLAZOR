@@ -1,0 +1,393 @@
+@page "/events/{id:int}/register"
+@using Blazor.Models
+@using Blazor.Services
+@inject EventService EventService
+@inject NavigationHelper NavHelper
+@inject NavigationManager Navigation
+@inject UserSessionService UserSession
+@inject AttendanceService AttendanceService
+@rendermode InteractiveServer
+
+<PageTitle>@(eventItem?.Name ?? "Register for Event") - EventEase</PageTitle>
+
+<div class="container my-4">
+    @if (isLoading)
+    {
+        <div class="text-center my-5">
+            <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-3 text-muted">Loading registration form...</p>
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(validationError))
+    {
+        <div class="card border-danger shadow-sm">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-x-circle-fill text-danger" style="font-size: 4rem;"></i>
+                <h3 class="mt-3">@validationError</h3>
+                <p class="text-muted mb-4">@validationDetails</p>
+                
+                <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+                    <button class="btn btn-primary" @onclick="GoBackToEvents">
+                        <i class="bi bi-calendar-event"></i> Browse Available Events
+                    </button>
+                    @if (eventItem != null)
+                    {
+                        <button class="btn btn-outline-secondary" @onclick="ViewEventDetails">
+                            <i class="bi bi-info-circle"></i> View Event Details
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+    else if (eventItem == null)
+    {
+        <div class="alert alert-warning">
+            <h4>Event Not Found</h4>
+            <p>The event you're trying to register for doesn't exist.</p>
+            <button class="btn btn-primary" @onclick="GoBackToEvents">Back to Events</button>
+        </div>
+    }
+    else if (registrationComplete)
+    {
+        <div class="card shadow-sm">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
+                <h2 class="mt-3">Registration Successful!</h2>
+                <p class="lead">You're all set for <strong>@eventItem.Name</strong></p>
+                <p>We've sent a confirmation to your email address.</p>
+                
+                <div class="alert alert-info mt-4">
+                    <h6>Event Details</h6>
+                    <p class="mb-0">
+                        <strong>Date:</strong> @eventItem.Date.ToString("dddd, MMMM dd, yyyy")<br/>
+                        <strong>Time:</strong> @eventItem.Date.ToString("h:mm tt")<br/>
+                        <strong>Location:</strong> @eventItem.Location
+                    </p>
+                </div>
+
+                <button class="btn btn-primary me-2" @onclick="GoBackToEvents">
+                    Browse More Events
+                </button>
+                <button class="btn btn-outline-secondary" @onclick="ViewEventDetails">
+                    View Event Details
+                </button>
+            </div>
+        </div>
+    }
+    else
+    {
+        <Breadcrumb Items="@breadcrumbItems" />
+
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <h2 class="card-title mb-4">Register for Event</h2>
+
+                        @if (!string.IsNullOrEmpty(errorMessage))
+                        {
+                            <div class="alert alert-danger">
+                                @errorMessage
+                            </div>
+                        }
+
+                        <EditForm Model="@registrationForm" OnValidSubmit="HandleSubmit">
+                            <DataAnnotationsValidator />
+                            
+                            <div class="mb-3">
+                                <label for="firstName" class="form-label">First Name *</label>
+                                <InputText id="firstName" class="form-control" @bind-Value="registrationForm.FirstName" />
+                                <ValidationMessage For="@(() => registrationForm.FirstName)" />
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="lastName" class="form-label">Last Name *</label>
+                                <InputText id="lastName" class="form-control" @bind-Value="registrationForm.LastName" />
+                                <ValidationMessage For="@(() => registrationForm.LastName)" />
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="email" class="form-label">Email Address *</label>
+                                <InputText id="email" type="email" class="form-control" @bind-Value="registrationForm.Email" />
+                                <ValidationMessage For="@(() => registrationForm.Email)" />
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="phone" class="form-label">Phone Number *</label>
+                                <InputText id="phone" class="form-control" @bind-Value="registrationForm.Phone" />
+                                <ValidationMessage For="@(() => registrationForm.Phone)" />
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="organization" class="form-label">Organization (Optional)</label>
+                                <InputText id="organization" class="form-control" @bind-Value="registrationForm.Organization" />
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="specialRequirements" class="form-label">Special Requirements (Optional)</label>
+                                <InputTextArea id="specialRequirements" class="form-control" rows="3" @bind-Value="registrationForm.SpecialRequirements" />
+                                <small class="form-text text-muted">Dietary restrictions, accessibility needs, etc.</small>
+                            </div>
+
+                            <div class="mb-4 form-check">
+                                <InputCheckbox id="agreeToTerms" class="form-check-input" @bind-Value="registrationForm.AgreeToTerms" />
+                                <label class="form-check-label" for="agreeToTerms">
+                                    I agree to the terms and conditions *
+                                </label>
+                                <ValidationMessage For="@(() => registrationForm.AgreeToTerms)" />
+                            </div>
+
+                            <div class="d-flex gap-2">
+                                <button type="submit" class="btn btn-success" disabled="@isSubmitting">
+                                    @if (isSubmitting)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                        <span>Processing...</span>
+                                    }
+                                    else
+                                    {
+                                        <i class="bi bi-check-circle"></i>
+                                        <span>Complete Registration</span>
+                                    }
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary" @onclick="GoBack">
+                                    Cancel
+                                </button>
+                            </div>
+                        </EditForm>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title">Event Summary</h5>
+                        <hr/>
+                        <h6>@eventItem.Name</h6>
+                        <p class="small">
+                            <i class="bi bi-calendar-event"></i> @eventItem.Date.ToString("MMM dd, yyyy")<br/>
+                            <i class="bi bi-clock"></i> @eventItem.Date.ToString("h:mm tt")<br/>
+                            <i class="bi bi-geo-alt"></i> @eventItem.Location
+                        </p>
+                        <span class="badge bg-primary">@eventItem.Category</span>
+                        <hr/>
+                        <p class="small mb-0">
+                            <strong>Available Spots:</strong><br/>
+                            @(eventItem.Capacity - eventItem.RegisteredAttendees) of @eventItem.Capacity
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private Event? eventItem;
+    private RegistrationForm registrationForm = new();
+    private List<BreadcrumbItem> breadcrumbItems = new();
+    private bool registrationComplete = false;
+    private bool isSubmitting = false;
+    private bool isLoading = false;
+    private string errorMessage = string.Empty;
+    private string validationError = string.Empty;
+    private string validationDetails = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAndValidateEventAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Reload event if ID changes
+        if (eventItem == null || eventItem.Id != Id)
+        {
+            await LoadAndValidateEventAsync();
+        }
+    }
+
+    private async Task LoadAndValidateEventAsync()
+    {
+        isLoading = true;
+        validationError = string.Empty;
+        validationDetails = string.Empty;
+
+        try
+        {
+            // Validate ID
+            if (Id <= 0)
+            {
+                validationError = "Invalid Event ID";
+                validationDetails = $"The event ID must be a positive number. Provided: {Id}";
+                isLoading = false;
+                return;
+            }
+
+            // Check if event exists
+            if (!NavHelper.IsValidEventId(Id))
+            {
+                validationError = "Event Not Found";
+                validationDetails = $"No event exists with ID {Id}. The event may have been cancelled or removed.";
+                isLoading = false;
+                return;
+            }
+
+            // Simulate async loading
+            await Task.Delay(100);
+            
+            eventItem = EventService.GetEventById(Id);
+
+            if (eventItem == null)
+            {
+                validationError = "Unable to Load Event";
+                validationDetails = "The event information could not be loaded. Please try again.";
+                isLoading = false;
+                return;
+            }
+
+            // Check if event is full
+            if (eventItem.RegisteredAttendees >= eventItem.Capacity)
+            {
+                validationError = "Event is Full";
+                validationDetails = $"Unfortunately, {eventItem.Name} has reached its maximum capacity of {eventItem.Capacity} attendees. Please check other available events.";
+                isLoading = false;
+                return;
+            }
+
+            // Check if event has already passed
+            if (eventItem.Date < DateTime.Now)
+            {
+                validationError = "Event Has Passed";
+                validationDetails = $"{eventItem.Name} took place on {eventItem.Date:MMMM dd, yyyy}. You cannot register for past events.";
+                isLoading = false;
+                return;
+            }
+
+            SetupBreadcrumbs();
+        }
+        catch (Exception ex)
+        {
+            validationError = "Error Loading Event";
+            validationDetails = $"An unexpected error occurred: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void SetupBreadcrumbs()
+    {
+        breadcrumbItems = new List<BreadcrumbItem>
+        {
+            new BreadcrumbItem { Text = "Home", Url = "/", IsActive = false },
+            new BreadcrumbItem { Text = "Events", Url = "/events", IsActive = false },
+            new BreadcrumbItem { Text = eventItem?.Name ?? "Event", Url = $"/events/{Id}", IsActive = false },
+            new BreadcrumbItem { Text = "Register", Url = $"/events/{Id}/register", IsActive = true }
+        };
+    }
+
+    private async Task HandleSubmit()
+    {
+        if (eventItem == null) return;
+
+        isSubmitting = true;
+        errorMessage = string.Empty;
+        
+        try
+        {
+            // Re-validate event capacity before submission
+            var currentEvent = EventService.GetEventById(Id);
+            if (currentEvent == null)
+            {
+                errorMessage = "Event no longer exists. Registration cannot be completed.";
+                isSubmitting = false;
+                return;
+            }
+
+            if (currentEvent.RegisteredAttendees >= currentEvent.Capacity)
+            {
+                errorMessage = "Event is now full. Someone registered just before you.";
+                eventItem = currentEvent; // Update to show current capacity
+                isSubmitting = false;
+                return;
+            }
+            
+            // Simulate API call delay
+            await Task.Delay(1000);
+
+            var success = EventService.RegisterForEvent(Id);
+            
+            if (success)
+            {
+                // Register attendance if user is logged in
+                if (UserSession.IsLoggedIn && UserSession.CurrentUser != null)
+                {
+                    AttendanceService.RegisterAttendance(UserSession.CurrentUser.Id, Id);
+                }
+                
+                registrationComplete = true;
+            }
+            else
+            {
+                errorMessage = "Registration failed. The event may be full or no longer available.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"An error occurred during registration: {ex.Message}";
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private void GoBack()
+    {
+        NavHelper.NavigateToEventDetails(Id);
+    }
+
+    private void GoBackToEvents()
+    {
+        NavHelper.NavigateToEvents();
+    }
+
+    private void ViewEventDetails()
+    {
+        NavHelper.NavigateToEventDetails(Id);
+    }
+
+    public class RegistrationForm
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "First name is required")]
+        public string FirstName { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Last name is required")]
+        public string LastName { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Email is required")]
+        [System.ComponentModel.DataAnnotations.EmailAddress(ErrorMessage = "Invalid email address")]
+        public string Email { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Phone number is required")]
+        [System.ComponentModel.DataAnnotations.Phone(ErrorMessage = "Invalid phone number")]
+        public string Phone { get; set; } = string.Empty;
+
+        public string? Organization { get; set; }
+
+        public string? SpecialRequirements { get; set; }
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "You must agree to the terms")]
+        [System.ComponentModel.DataAnnotations.Range(typeof(bool), "true", "true", ErrorMessage = "You must agree to the terms")]
+        public bool AgreeToTerms { get; set; }
+    }
+}

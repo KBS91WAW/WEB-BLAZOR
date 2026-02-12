@@ -1,0 +1,198 @@
+@page "/attendance"
+@using Blazor.Models
+@using Blazor.Services
+@inject AttendanceService AttendanceService
+@inject EventService EventService
+@inject UserSessionService UserSession
+@rendermode InteractiveServer
+
+<PageTitle>Attendance Dashboard - EventEase</PageTitle>
+
+<div class="container my-4">
+    <div class="mb-4">
+        <h2><i class="bi bi-clipboard-data"></i> Attendance Dashboard</h2>
+        <p class="text-muted">Monitor event participation and attendance rates</p>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-12">
+            <AttendanceTracker ShowAttendeeList="false" ShowCompact="true" />
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-calendar-event"></i> Event Attendance Details</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Filter by Event:</label>
+                        <select class="form-select" @bind="selectedEventId">
+                            <option value="">All Events</option>
+                            @foreach (var evt in events)
+                            {
+                                <option value="@evt.Id">@evt.Name</option>
+                            }
+                        </select>
+                    </div>
+
+                    @if (selectedEventId.HasValue)
+                    {
+                        <AttendanceTracker EventId="@selectedEventId" 
+                                          ShowAttendeeList="true" 
+                                          AllowCheckIn="true" 
+                                          ShowRefreshButton="true" />
+                    }
+                    else
+                    {
+                        <div class="row">
+                            @foreach (var evt in events)
+                            {
+                                <div class="col-md-6 col-lg-4 mb-3">
+                                    <div class="card h-100">
+                                        <div class="card-body">
+                                            <h6 class="card-title">@evt.Name</h6>
+                                            <p class="small text-muted mb-2">
+                                                <i class="bi bi-calendar"></i> @evt.Date.ToString("MMM dd, yyyy")
+                                            </p>
+                                            
+                                            @{
+                                                var registered = AttendanceService.GetRegisteredCount(evt.Id);
+                                                var checkedIn = AttendanceService.GetCheckedInCount(evt.Id);
+                                                var rate = AttendanceService.GetAttendanceRate(evt.Id);
+                                            }
+                                            
+                                            <div class="mb-2">
+                                                <small class="text-muted">Registered: <strong>@registered</strong></small><br/>
+                                                <small class="text-muted">Checked In: <strong>@checkedIn</strong></small>
+                                            </div>
+
+                                            <div class="progress mb-2" style="height: 15px;">
+                                                <div class="progress-bar @GetProgressBarClass(rate)" 
+                                                     style="width: @rate%">
+                                                    @rate%
+                                                </div>
+                                            </div>
+
+                                            <button class="btn btn-sm btn-outline-primary w-100" 
+                                                    @onclick="() => ViewEventAttendance(evt.Id)">
+                                                <i class="bi bi-eye"></i> View Details
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (UserSession.IsLoggedIn)
+    {
+        <div class="row">
+            <div class="col-12">
+                <div class="card shadow-sm">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="bi bi-person-check"></i> My Attendance
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        @{
+                            var userAttendance = AttendanceService.GetAttendanceByUser(UserSession.CurrentUser!.Id);
+                        }
+
+                        @if (userAttendance.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Event</th>
+                                            <th>Registered</th>
+                                            <th>Status</th>
+                                            <th>Check-in Time</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var record in userAttendance)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <strong>@(EventService.GetEventById(record.EventId)?.Name)</strong><br/>
+                                                    <small class="text-muted">
+                                                        @(EventService.GetEventById(record.EventId)?.Date.ToString("MMM dd, yyyy"))
+                                                    </small>
+                                                </td>
+                                                <td>@record.RegisteredAt.ToString("MMM dd, h:mm tt")</td>
+                                                <td>
+                                                    @if (record.IsCheckedIn)
+                                                    {
+                                                        <span class="badge bg-success">
+                                                            <i class="bi bi-check-circle"></i> Checked In
+                                                        </span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-secondary">Registered</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @if (record.CheckedInAt.HasValue)
+                                                    {
+                                                        @record.CheckedInAt.Value.ToString("h:mm tt")
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">-</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="alert alert-info mb-0">
+                                <i class="bi bi-info-circle"></i> You haven't registered for any events yet.
+                                <a href="/events" class="alert-link">Browse events</a>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<Event> events = new();
+    private int? selectedEventId;
+
+    protected override void OnInitialized()
+    {
+        events = EventService.GetAllEvents();
+    }
+
+    private void ViewEventAttendance(int eventId)
+    {
+        selectedEventId = eventId;
+    }
+
+    private string GetProgressBarClass(double rate)
+    {
+        return rate switch
+        {
+            >= 80 => "bg-success",
+            >= 60 => "bg-info",
+            >= 40 => "bg-warning",
+            _ => "bg-danger"
+        };
+    }
+}

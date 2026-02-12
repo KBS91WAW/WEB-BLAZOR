@@ -1,0 +1,129 @@
+@using Blazor.Models
+
+<div class="position-relative" 
+     @onmouseenter="HandleMouseEnter" 
+     @onmouseleave="HandleMouseLeave">
+    
+    <div class="d-flex align-items-center p-2 @(IsHovered ? "bg-light" : "") rounded">
+        <div class="me-3">
+            <i class="bi @GetCategoryIcon() text-primary" style="font-size: 2rem;"></i>
+        </div>
+        <div class="flex-grow-1">
+            <h6 class="mb-1">@Event.Name</h6>
+            <small class="text-muted">
+                @Event.Date.ToString("MMM dd") • @Event.Location
+            </small>
+        </div>
+        <div class="text-end">
+            <span class="badge @GetAvailabilityBadge()">
+                @GetAvailabilityText()
+            </span>
+        </div>
+    </div>
+
+    @if (IsHovered && ShowTooltip)
+    {
+        <div class="position-absolute top-100 start-0 w-100 mt-1 card shadow-lg border-primary" 
+             style="z-index: 1000; animation: fadeIn 0.2s;">
+            <div class="card-body">
+                <h6>@Event.Name</h6>
+                <p class="small mb-2">@Event.Description</p>
+                <hr class="my-2" />
+                <div class="row small">
+                    <div class="col-6">
+                        <strong>Date:</strong><br/>
+                        @Event.Date.ToString("MMM dd, yyyy")
+                    </div>
+                    <div class="col-6">
+                        <strong>Time:</strong><br/>
+                        @Event.Date.ToString("h:mm tt")
+                    </div>
+                </div>
+                <div class="mt-2 small">
+                    <strong>Location:</strong> @Event.Location
+                </div>
+                <div class="mt-2">
+                    <div class="progress" style="height: 8px;">
+                        <div class="progress-bar" style="width: @GetCapacityPercentage()%"></div>
+                    </div>
+                    <small class="text-muted">
+                        @Event.RegisteredAttendees / @Event.Capacity registered
+                    </small>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Event Event { get; set; } = null!;
+
+    [Parameter]
+    public bool ShowTooltip { get; set; } = true;
+
+    [Parameter]
+    public EventCallback<Event> OnEventHovered { get; set; }
+
+    private bool IsHovered { get; set; } = false;
+
+    private async Task HandleMouseEnter()
+    {
+        IsHovered = true;
+        if (OnEventHovered.HasDelegate)
+        {
+            await OnEventHovered.InvokeAsync(Event);
+        }
+    }
+
+    private void HandleMouseLeave()
+    {
+        IsHovered = false;
+    }
+
+    private string GetCategoryIcon()
+    {
+        return Event.Category switch
+        {
+            "Technology" => "bi-laptop",
+            "Social" => "bi-people",
+            "Corporate" => "bi-briefcase",
+            "Entertainment" => "bi-music-note-beamed",
+            _ => "bi-calendar-event"
+        };
+    }
+
+    private string GetAvailabilityBadge()
+    {
+        var spotsRemaining = Event.Capacity - Event.RegisteredAttendees;
+        return spotsRemaining switch
+        {
+            0 => "bg-danger",
+            <= 10 => "bg-warning",
+            _ => "bg-success"
+        };
+    }
+
+    private string GetAvailabilityText()
+    {
+        var spotsRemaining = Event.Capacity - Event.RegisteredAttendees;
+        return spotsRemaining switch
+        {
+            0 => "Full",
+            <= 10 => $"{spotsRemaining} left",
+            _ => "Available"
+        };
+    }
+
+    private double GetCapacityPercentage()
+    {
+        return ((double)Event.RegisteredAttendees / Event.Capacity) * 100;
+    }
+}
+
+<style>
+    @@keyframes fadeIn {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+</style>

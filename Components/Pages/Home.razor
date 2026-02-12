@@ -1,0 +1,123 @@
+﻿@page "/"
+@using Blazor.Models
+@using Blazor.Services
+@inject EventService EventService
+@rendermode InteractiveServer
+
+<PageTitle>Home - EventEase</PageTitle>
+
+<div class="container my-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8 text-center">
+            <h1 class="display-4 mb-4">Welcome to EventEase</h1>
+            <p class="lead mb-4">
+                Your premier destination for corporate and social event management. 
+                Discover amazing events, connect with like-minded professionals, and create unforgettable experiences.
+            </p>
+            <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+                <a href="/events" class="btn btn-primary btn-lg px-4">
+                    <i class="bi bi-calendar-event"></i> Browse Events
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-5 g-4">
+        <div class="col-md-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body text-center">
+                    <div class="mb-3">
+                        <i class="bi bi-search" style="font-size: 3rem; color: var(--bs-primary);"></i>
+                    </div>
+                    <h5 class="card-title">Discover Events</h5>
+                    <p class="card-text">Browse through a wide variety of corporate and social events tailored to your interests.</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body text-center">
+                    <div class="mb-3">
+                        <i class="bi bi-info-circle" style="font-size: 3rem; color: var(--bs-primary);"></i>
+                    </div>
+                    <h5 class="card-title">Event Details</h5>
+                    <p class="card-text">Get comprehensive information about each event including date, location, and capacity.</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body text-center">
+                    <div class="mb-3">
+                        <i class="bi bi-check-circle" style="font-size: 3rem; color: var(--bs-primary);"></i>
+                    </div>
+                    <h5 class="card-title">Easy Registration</h5>
+                    <p class="card-text">Register for events quickly and securely with our streamlined registration process.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upcoming Events Preview with Interactive Data Binding -->
+    <div class="row mt-5">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h4 class="mb-0">
+                            <i class="bi bi-star"></i> Upcoming Events
+                        </h4>
+                        <a href="/events" class="btn btn-sm btn-outline-primary">View All</a>
+                    </div>
+
+                    @if (hoveredEvent != null)
+                    {
+                        <div class="alert alert-info">
+                            <small>
+                                <i class="bi bi-cursor"></i> Currently viewing: <strong>@hoveredEvent.Name</strong>
+                            </small>
+                        </div>
+                    }
+
+                    @if (upcomingEvents.Any())
+                    {
+                        <div class="row g-2">
+                            @foreach (var eventItem in upcomingEvents)
+                            {
+                                <div class="col-12">
+                                    <EventPreview Event="eventItem" 
+                                                  ShowTooltip="true"
+                                                  OnEventHovered="HandleEventHovered" />
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted">No upcoming events at this time.</p>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<Event> upcomingEvents = new();
+    private Event? hoveredEvent;
+
+    protected override void OnInitialized()
+    {
+        // Load upcoming events (next 3 events)
+        upcomingEvents = EventService.GetAllEvents()
+            .Where(e => e.Date >= DateTime.Now)
+            .Take(3)
+            .ToList();
+    }
+
+    private void HandleEventHovered(Event eventItem)
+    {
+        hoveredEvent = eventItem;
+        StateHasChanged();
+    }
+}

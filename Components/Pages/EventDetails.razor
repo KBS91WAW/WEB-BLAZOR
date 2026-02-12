@@ -1,0 +1,287 @@
+@page "/events/{id:int}"
+@using Blazor.Models
+@using Blazor.Services
+@inject EventService EventService
+@inject NavigationHelper NavHelper
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>@(eventItem?.Name ?? "Event Details") - EventEase</PageTitle>
+
+<div class="container my-4">
+    @if (isLoading)
+    {
+        <div class="text-center my-5">
+            <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-3 text-muted">Loading event details...</p>
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="card border-danger shadow-sm">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-exclamation-circle-fill text-danger" style="font-size: 4rem;"></i>
+                <h3 class="mt-3">@errorMessage</h3>
+                <p class="text-muted mb-4">@errorDetails</p>
+                
+                <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+                    <button class="btn btn-primary" @onclick="GoBackToEvents">
+                        <i class="bi bi-calendar-event"></i> Browse All Events
+                    </button>
+                    <button class="btn btn-outline-secondary" @onclick="NavigateHome">
+                        <i class="bi bi-house-door"></i> Go Home
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+    else if (eventItem == null)
+    {
+        <div class="alert alert-warning">
+            <h4>Event Not Found</h4>
+            <p>The event you're looking for doesn't exist.</p>
+            <button class="btn btn-primary" @onclick="GoBackToEvents">Back to Events</button>
+        </div>
+    }
+    else
+    {
+        <Breadcrumb Items="@breadcrumbItems" />
+
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card shadow-sm mb-4">
+                    <div class="card-body">
+                        <span class="badge bg-primary mb-3">@eventItem.Category</span>
+                        <h1 class="card-title mb-3">@eventItem.Name</h1>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <h6><i class="bi bi-calendar-event"></i> Date & Time</h6>
+                                <p>@eventItem.Date.ToString("dddd, MMMM dd, yyyy")<br/>
+                                   @eventItem.Date.ToString("h:mm tt")</p>
+                            </div>
+                            <div class="col-md-6">
+                                <h6><i class="bi bi-geo-alt"></i> Location</h6>
+                                <p>@eventItem.Location</p>
+                            </div>
+                        </div>
+
+                        <h6>Description</h6>
+                        <p class="card-text">@eventItem.Description</p>
+
+                        @if (DaysUntilEvent >= 0)
+                        {
+                            <div class="alert alert-info">
+                                <i class="bi bi-calendar-check"></i>
+                                @if (DaysUntilEvent == 0)
+                                {
+                                    <strong>This event is TODAY!</strong>
+                                }
+                                else if (DaysUntilEvent == 1)
+                                {
+                                    <strong>This event is TOMORROW!</strong>
+                                }
+                                else
+                                {
+                                    <span>This event is in <strong>@DaysUntilEvent days</strong></span>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <!-- Live Capacity Tracker Component -->
+                <CapacityTracker Event="eventItem" 
+                                 ShowSimulator="true"
+                                 OnSimulateRegistration="SimulateRegistration" />
+
+                <!-- Attendance Tracker Component -->
+                <div class="mt-3">
+                    <AttendanceTracker EventId="@Id" 
+                                      ShowAttendeeList="false" 
+                                      ShowCompact="true"
+                                      ShowRefreshButton="true" />
+                </div>
+
+                <div class="card shadow-sm mt-3">
+                    <div class="card-body">
+                        <h5 class="card-title">Registration</h5>
+                        
+                        <div class="mb-3">
+                            <h6>Capacity</h6>
+                            <p class="mb-2">
+                                <strong>@eventItem.RegisteredAttendees</strong> of <strong>@eventItem.Capacity</strong> spots filled
+                            </p>
+                            <div class="progress mb-2" style="height: 20px;">
+                                <div class="progress-bar @GetProgressBarClass()" role="progressbar" 
+                                     style="width: @(((double)eventItem.RegisteredAttendees / eventItem.Capacity) * 100)%"
+                                     aria-valuenow="@eventItem.RegisteredAttendees" 
+                                     aria-valuemin="0" 
+                                     aria-valuemax="@eventItem.Capacity">
+                                    @(Math.Round(((double)eventItem.RegisteredAttendees / eventItem.Capacity) * 100, 0))%
+                                </div>
+                            </div>
+                            <small class="text-muted">
+                                @(eventItem.Capacity - eventItem.RegisteredAttendees) spots remaining
+                            </small>
+                        </div>
+
+                        @if (eventItem.RegisteredAttendees >= eventItem.Capacity)
+                        {
+                            <div class="alert alert-danger">
+                                <strong>Event Full</strong><br/>
+                                This event has reached maximum capacity.
+                            </div>
+                        }
+                        else
+                        {
+                            <button class="btn btn-success w-100 mb-2" @onclick="RegisterForEvent">
+                                <i class="bi bi-check-circle"></i> Register for Event
+                            </button>
+                        }
+                        
+                        <button class="btn btn-outline-secondary w-100" @onclick="GoBackToEvents">
+                            <i class="bi bi-arrow-left"></i> Back to Events
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private Event? eventItem;
+    private List<BreadcrumbItem> breadcrumbItems = new();
+    private bool isLoading = false;
+    private string errorMessage = string.Empty;
+    private string errorDetails = string.Empty;
+    private int DaysUntilEvent => eventItem != null ? (eventItem.Date - DateTime.Now).Days : -1;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadEventAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Reload event if ID changes
+        if (eventItem == null || eventItem.Id != Id)
+        {
+            await LoadEventAsync();
+        }
+    }
+
+    private void SetupBreadcrumbs()
+    {
+        breadcrumbItems = new List<BreadcrumbItem>
+        {
+            new BreadcrumbItem { Text = "Home", Url = "/", IsActive = false },
+            new BreadcrumbItem { Text = "Events", Url = "/events", IsActive = false },
+            new BreadcrumbItem { Text = eventItem?.Name ?? "Event Details", Url = $"/events/{Id}", IsActive = true }
+        };
+    }
+
+    private async Task LoadEventAsync()
+    {
+        isLoading = true;
+        errorMessage = string.Empty;
+        errorDetails = string.Empty;
+
+        try
+        {
+            // Validate ID
+            if (Id <= 0)
+            {
+                errorMessage = "Invalid Event ID";
+                errorDetails = $"Event ID must be a positive number. Provided: {Id}";
+                isLoading = false;
+                return;
+            }
+
+            // Validate ID with helper
+            if (!NavHelper.IsValidEventId(Id))
+            {
+                errorMessage = "Event Not Found";
+                errorDetails = $"No event exists with ID {Id}. The event may have been removed or the link might be incorrect.";
+                isLoading = false;
+                return;
+            }
+
+            // Simulate async loading delay (for demonstration)
+            await Task.Delay(100);
+            
+            eventItem = EventService.GetEventById(Id);
+
+            if (eventItem == null)
+            {
+                errorMessage = "Event Not Found";
+                errorDetails = $"Unable to load event with ID {Id}. Please try again or browse all events.";
+            }
+            else
+            {
+                SetupBreadcrumbs();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Error Loading Event";
+            errorDetails = $"An unexpected error occurred while loading the event: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SimulateRegistration()
+    {
+        if (eventItem != null && eventItem.RegisteredAttendees < eventItem.Capacity)
+        {
+            try
+            {
+                EventService.RegisterForEvent(Id);
+                // Reload event to get updated data
+                await LoadEventAsync();
+                StateHasChanged();
+            }
+            catch (Exception ex)
+            {
+                errorMessage = "Registration Error";
+                errorDetails = $"Failed to register: {ex.Message}";
+            }
+        }
+    }
+
+    private string GetProgressBarClass()
+    {
+        if (eventItem == null) return "bg-info";
+        
+        var percentage = ((double)eventItem.RegisteredAttendees / eventItem.Capacity) * 100;
+        
+        return percentage switch
+        {
+            >= 90 => "bg-danger",
+            >= 70 => "bg-warning",
+            _ => "bg-success"
+        };
+    }
+
+    private void RegisterForEvent()
+    {
+        if (eventItem != null && eventItem.RegisteredAttendees < eventItem.Capacity)
+        {
+            NavHelper.NavigateToEventRegistration(Id);
+        }
+    }
+
+    private void GoBackToEvents() => NavHelper.NavigateToEvents();
+    private void NavigateHome() => NavHelper.NavigateToHome();
+}

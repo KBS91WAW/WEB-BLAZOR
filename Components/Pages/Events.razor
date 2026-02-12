@@ -1,0 +1,248 @@
+@page "/events"
+@using Blazor.Models
+@using Blazor.Services
+@inject EventService EventService
+@inject NavigationHelper NavHelper
+@rendermode InteractiveServer
+
+<PageTitle>Browse Events - EventEase</PageTitle>
+
+<div class="container my-4">
+    <h1 class="mb-4">Browse Events</h1>
+    
+    <!-- Live Statistics Component -->
+    <EventStatistics ShowCategoryBreakdown="true" RefreshInterval="5000" />
+
+    <!-- Search and Filter Controls with Two-Way Binding -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label for="searchBox" class="form-label">
+                        <i class="bi bi-search"></i> Search Events
+                    </label>
+                    <input type="text" 
+                           id="searchBox" 
+                           class="form-control" 
+                           placeholder="Search by name or location..."
+                           @bind="searchTerm"
+                           @bind:event="oninput" />
+                    @if (!string.IsNullOrEmpty(searchTerm))
+                    {
+                        <small class="text-muted">Found @filteredEvents.Count result(s)</small>
+                    }
+                </div>
+                
+                <div class="col-md-3">
+                    <label for="categoryFilter" class="form-label">
+                        <i class="bi bi-funnel"></i> Category
+                    </label>
+                    <select id="categoryFilter" 
+                            class="form-select" 
+                            @bind="selectedCategory">
+                        <option value="">All Categories</option>
+                        @foreach (var category in categories)
+                        {
+                            <option value="@category">@category</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <label for="sortBy" class="form-label">
+                        <i class="bi bi-sort-down"></i> Sort By
+                    </label>
+                    <select id="sortBy" 
+                            class="form-select" 
+                            @bind="sortOrder">
+                        <option value="date">Date (Earliest)</option>
+                        <option value="date-desc">Date (Latest)</option>
+                        <option value="name">Name (A-Z)</option>
+                        <option value="availability">Availability</option>
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label">
+                        <i class="bi bi-sliders"></i> Filter
+                    </label>
+                    <div class="form-check">
+                        <input class="form-check-input" 
+                               type="checkbox" 
+                               id="availableOnly"
+                               @bind="showAvailableOnly" />
+                        <label class="form-check-label" for="availableOnly">
+                            Available only
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            @if (HasActiveFilters())
+            {
+                <div class="mt-3">
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="ClearFilters">
+                        <i class="bi bi-x-circle"></i> Clear Filters
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+
+    @if (filteredEvents == null || !filteredEvents.Any())
+    {
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i> No events found matching your criteria.
+        </div>
+    }
+    else
+    {
+        <div class="mb-3">
+            <strong>@filteredEvents.Count</strong> event(s) found
+        </div>
+        
+        <div class="row">
+            @foreach (var eventItem in filteredEvents)
+            {
+                <EventCard Event="eventItem" 
+                           OnViewDetailsClicked="ViewEventDetails"
+                           ShowProgress="true"
+                           ShowAvailability="true"
+                           ShowCountdown="true"
+                           IsHighlighted="IsEventUpcoming(eventItem)" />
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<Event> allEvents = new();
+    private List<Event> filteredEvents = new();
+    private List<string> categories = new();
+    
+    // Two-way binding properties
+    private string searchTerm = string.Empty;
+    private string selectedCategory = string.Empty;
+    private string sortOrder = "date";
+    private bool showAvailableOnly = false;
+
+    // Property change tracking for automatic filtering
+    private string SearchTerm
+    {
+        get => searchTerm;
+        set
+        {
+            searchTerm = value;
+            ApplyFilters();
+        }
+    }
+
+    private string SelectedCategory
+    {
+        get => selectedCategory;
+        set
+        {
+            selectedCategory = value;
+            ApplyFilters();
+        }
+    }
+
+    private string SortOrder
+    {
+        get => sortOrder;
+        set
+        {
+            sortOrder = value;
+            ApplyFilters();
+        }
+    }
+
+    private bool ShowAvailableOnly
+    {
+        get => showAvailableOnly;
+        set
+        {
+            showAvailableOnly = value;
+            ApplyFilters();
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        LoadEvents();
+        categories = EventService.GetCategories();
+    }
+
+    private void LoadEvents()
+    {
+        allEvents = EventService.GetAllEvents();
+        ApplyFilters();
+    }
+
+    private void ApplyFilters()
+    {
+        // Start with all events
+        var result = allEvents.AsEnumerable();
+
+        // Apply search filter
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            result = result.Where(e => 
+                e.Name.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                e.Location.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                e.Description.Contains(searchTerm, StringComparison.OrdinalIgnoreCase));
+        }
+
+        // Apply category filter
+        if (!string.IsNullOrEmpty(selectedCategory))
+        {
+            result = result.Where(e => e.Category.Equals(selectedCategory, StringComparison.OrdinalIgnoreCase));
+        }
+
+        // Apply availability filter
+        if (showAvailableOnly)
+        {
+            result = result.Where(e => e.RegisteredAttendees < e.Capacity);
+        }
+
+        // Apply sorting
+        result = sortOrder switch
+        {
+            "date" => result.OrderBy(e => e.Date),
+            "date-desc" => result.OrderByDescending(e => e.Date),
+            "name" => result.OrderBy(e => e.Name),
+            "availability" => result.OrderByDescending(e => e.Capacity - e.RegisteredAttendees),
+            _ => result.OrderBy(e => e.Date)
+        };
+
+        filteredEvents = result.ToList();
+    }
+
+    private bool HasActiveFilters()
+    {
+        return !string.IsNullOrWhiteSpace(searchTerm) ||
+               !string.IsNullOrEmpty(selectedCategory) ||
+               showAvailableOnly ||
+               sortOrder != "date";
+    }
+
+    private void ClearFilters()
+    {
+        searchTerm = string.Empty;
+        selectedCategory = string.Empty;
+        sortOrder = "date";
+        showAvailableOnly = false;
+        ApplyFilters();
+    }
+
+    private bool IsEventUpcoming(Event eventItem)
+    {
+        var daysUntil = (eventItem.Date - DateTime.Now).Days;
+        return daysUntil >= 0 && daysUntil <= 7;
+    }
+
+    private void ViewEventDetails(int eventId)
+    {
+        NavHelper.NavigateToEventDetails(eventId);
+    }
+}

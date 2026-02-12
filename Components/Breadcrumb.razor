@@ -1,0 +1,84 @@
+@using Blazor.Services
+@inject NavigationManager NavigationManager
+
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        @foreach (var item in Items)
+        {
+            @if (item.IsActive)
+            {
+                <li class="breadcrumb-item active" aria-current="page">
+                    @item.Text
+                </li>
+            }
+            else
+            {
+                <li class="breadcrumb-item">
+                    <a href="@item.Url" @onclick="@(() => NavigateTo(item.Url))" @onclick:preventDefault="true">
+                        @item.Text
+                    </a>
+                </li>
+            }
+        }
+    </ol>
+</nav>
+
+@code {
+    [Parameter]
+    public List<BreadcrumbItem> Items { get; set; } = new();
+
+    [Parameter]
+    public bool AutoGenerate { get; set; } = false;
+
+    protected override void OnInitialized()
+    {
+        if (AutoGenerate && !Items.Any())
+        {
+            GenerateBreadcrumbs();
+        }
+    }
+
+    private void GenerateBreadcrumbs()
+    {
+        var currentPath = new Uri(NavigationManager.Uri).AbsolutePath;
+        var segments = currentPath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+
+        Items.Add(new BreadcrumbItem { Text = "Home", Url = "/", IsActive = segments.Length == 0 });
+
+        var urlBuilder = "";
+        for (int i = 0; i < segments.Length; i++)
+        {
+            urlBuilder += $"/{segments[i]}";
+            var isLast = i == segments.Length - 1;
+            
+            Items.Add(new BreadcrumbItem 
+            { 
+                Text = FormatSegment(segments[i]), 
+                Url = urlBuilder, 
+                IsActive = isLast 
+            });
+        }
+    }
+
+    private string FormatSegment(string segment)
+    {
+        // Try to parse as number (event ID)
+        if (int.TryParse(segment, out _))
+        {
+            return "Event Details";
+        }
+
+        // Capitalize first letter and replace dashes with spaces
+        return segment switch
+        {
+            "events" => "Events",
+            "register" => "Register",
+            _ => System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(segment.Replace("-", " "))
+        };
+    }
+
+    private void NavigateTo(string url)
+    {
+        NavigationManager.NavigateTo(url);
+    }
+}

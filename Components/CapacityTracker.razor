@@ -1,0 +1,124 @@
+@using Blazor.Models
+
+<div class="card mb-3">
+    <div class="card-body">
+        <h6 class="card-title">
+            <i class="bi bi-people"></i> Live Capacity Tracker
+        </h6>
+        
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <div class="mb-2">
+                    <div class="d-flex justify-content-between">
+                        <span>Registered: <strong>@Event.RegisteredAttendees</strong></span>
+                        <span>Capacity: <strong>@Event.Capacity</strong></span>
+                    </div>
+                </div>
+                <div class="progress" style="height: 25px;">
+                    <div class="progress-bar @GetProgressBarClass() progress-bar-striped @(IsNearCapacity() ? "progress-bar-animated" : "")" 
+                         role="progressbar" 
+                         style="width: @GetProgressPercentage()%"
+                         aria-valuenow="@Event.RegisteredAttendees" 
+                         aria-valuemin="0" 
+                         aria-valuemax="@Event.Capacity">
+                        @Math.Round(GetProgressPercentage(), 1)%
+                    </div>
+                </div>
+                <small class="text-muted mt-1 d-block">
+                    @GetCapacityMessage()
+                </small>
+            </div>
+            
+            <div class="col-md-4 text-center">
+                <div class="p-2 rounded @GetStatusBackgroundClass()">
+                    <div class="h3 mb-0 @GetStatusTextClass()">@SpotsRemaining</div>
+                    <small class="text-muted">spots remaining</small>
+                </div>
+            </div>
+        </div>
+
+        @if (ShowSimulator && OnSimulateRegistration.HasDelegate)
+        {
+            <hr />
+            <div class="text-center">
+                <button class="btn btn-sm btn-outline-primary" 
+                        @onclick="SimulateRegistration"
+                        disabled="@(Event.RegisteredAttendees >= Event.Capacity)">
+                    <i class="bi bi-person-plus"></i> Simulate Registration
+                </button>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public Event Event { get; set; } = null!;
+
+    [Parameter]
+    public bool ShowSimulator { get; set; } = false;
+
+    [Parameter]
+    public EventCallback OnSimulateRegistration { get; set; }
+
+    private int SpotsRemaining => Event.Capacity - Event.RegisteredAttendees;
+
+    private double GetProgressPercentage()
+    {
+        return ((double)Event.RegisteredAttendees / Event.Capacity) * 100;
+    }
+
+    private string GetProgressBarClass()
+    {
+        var percentage = GetProgressPercentage();
+        return percentage switch
+        {
+            >= 100 => "bg-danger",
+            >= 90 => "bg-warning",
+            >= 70 => "bg-info",
+            _ => "bg-success"
+        };
+    }
+
+    private bool IsNearCapacity()
+    {
+        return GetProgressPercentage() >= 90;
+    }
+
+    private string GetStatusBackgroundClass()
+    {
+        return SpotsRemaining switch
+        {
+            0 => "bg-danger bg-opacity-10",
+            <= 10 => "bg-warning bg-opacity-10",
+            _ => "bg-success bg-opacity-10"
+        };
+    }
+
+    private string GetStatusTextClass()
+    {
+        return SpotsRemaining switch
+        {
+            0 => "text-danger",
+            <= 10 => "text-warning",
+            _ => "text-success"
+        };
+    }
+
+    private string GetCapacityMessage()
+    {
+        return SpotsRemaining switch
+        {
+            0 => "⚠️ This event is fully booked",
+            1 => "🔥 Only 1 spot left!",
+            <= 10 => $"🔥 Only {SpotsRemaining} spots left - Register soon!",
+            <= 50 => $"✅ {SpotsRemaining} spots available",
+            _ => $"✅ Plenty of space - {SpotsRemaining} spots available"
+        };
+    }
+
+    private async Task SimulateRegistration()
+    {
+        await OnSimulateRegistration.InvokeAsync();
+    }
+}

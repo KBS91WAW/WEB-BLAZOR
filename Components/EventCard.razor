@@ -1,0 +1,206 @@
+@using Blazor.Models
+
+@if (!IsValid())
+{
+    <div class="col-md-6 col-lg-4 mb-4">
+        <div class="card h-100 shadow-sm border-danger">
+            <div class="card-body text-center text-muted">
+                <i class="bi bi-exclamation-triangle text-warning" style="font-size: 2rem;"></i>
+                <p class="mt-2 mb-0">Invalid event data</p>
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <div class="col-md-6 col-lg-4 mb-4">
+        <div class="card h-100 shadow-sm @(IsHighlighted ? "border-primary border-2" : "")">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <span class="badge @GetCategoryBadgeClass()">@GetSafeCategory()</span>
+                    @if (ShowAvailability)
+                    {
+                        <span class="badge @GetAvailabilityBadgeClass()">
+                            @GetAvailabilityText()
+                        </span>
+                    }
+                </div>
+                <h5 class="card-title">@GetSafeName()</h5>
+                <p class="card-text">
+                    <i class="bi bi-calendar-event"></i> @Event.Date.ToString("MMM dd, yyyy")
+                    <br/>
+                    <i class="bi bi-clock"></i> @Event.Date.ToString("h:mm tt")
+                    <br/>
+                    <i class="bi bi-geo-alt"></i> @GetSafeLocation()
+                </p>
+            
+                @if (ShowProgress)
+                {
+                    <div class="mb-2">
+                        <small class="text-muted">
+                            @Event.RegisteredAttendees / @Event.Capacity attendees
+                        </small>
+                        <div class="progress" style="height: 5px;">
+                            <div class="progress-bar @GetProgressBarClass()" role="progressbar" 
+                                 style="width: @GetProgressPercentage()%">
+                            </div>
+                        </div>
+                    </div>
+                }
+
+                @if (ShowCountdown && DaysUntilEvent >= 0)
+                {
+                    <div class="alert alert-info py-1 px-2 small mb-2">
+                        <i class="bi bi-hourglass-split"></i> 
+                        @if (DaysUntilEvent == 0)
+                        {
+                            <span class="fw-bold">Today!</span>
+                        }
+                        else if (DaysUntilEvent == 1)
+                        {
+                            <span>Tomorrow</span>
+                        }
+                        else
+                        {
+                            <span>In @DaysUntilEvent days</span>
+                        }
+                    </div>
+                }
+            </div>
+            <div class="card-footer bg-white">
+                <button class="btn btn-primary w-100" @onclick="OnViewDetails" disabled="@(!IsValid())">
+                    @ButtonText
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Event Event { get; set; } = null!;
+
+    [Parameter]
+    public EventCallback<int> OnViewDetailsClicked { get; set; }
+
+    [Parameter]
+    public bool ShowProgress { get; set; } = true;
+
+    [Parameter]
+    public bool ShowAvailability { get; set; } = true;
+
+    [Parameter]
+    public bool ShowCountdown { get; set; } = true;
+
+    [Parameter]
+    public bool IsHighlighted { get; set; } = false;
+
+    [Parameter]
+    public string ButtonText { get; set; } = "View Details";
+
+    private string _cachedProgressBarClass = string.Empty;
+    private double _cachedProgressPercentage = 0;
+    private bool _cacheInitialized = false;
+
+    private int DaysUntilEvent => IsValid() ? (Event.Date - DateTime.Now).Days : -1;
+
+    protected override void OnParametersSet()
+    {
+        // Cache expensive calculations for performance
+        if (IsValid() && !_cacheInitialized)
+        {
+            _cachedProgressPercentage = CalculateProgressPercentage();
+            _cachedProgressBarClass = CalculateProgressBarClass(_cachedProgressPercentage);
+            _cacheInitialized = true;
+        }
+    }
+
+    private bool IsValid()
+    {
+        return Event != null &&
+               Event.Id > 0 &&
+               !string.IsNullOrWhiteSpace(Event.Name) &&
+               Event.Capacity > 0 &&
+               Event.RegisteredAttendees >= 0 &&
+               Event.RegisteredAttendees <= Event.Capacity &&
+               Event.Date >= DateTime.MinValue;
+    }
+
+    private string GetSafeName() => string.IsNullOrWhiteSpace(Event?.Name) ? "Untitled Event" : Event.Name;
+    private string GetSafeLocation() => string.IsNullOrWhiteSpace(Event?.Location) ? "Location TBA" : Event.Location;
+    private string GetSafeCategory() => string.IsNullOrWhiteSpace(Event?.Category) ? "General" : Event.Category;
+
+    private double GetProgressPercentage()
+    {
+        return _cacheInitialized ? _cachedProgressPercentage : CalculateProgressPercentage();
+    }
+
+    private double CalculateProgressPercentage()
+    {
+        if (!IsValid() || Event.Capacity == 0) return 0;
+        return Math.Min(100, ((double)Event.RegisteredAttendees / Event.Capacity) * 100);
+    }
+
+    private string GetProgressBarClass()
+    {
+        return _cacheInitialized ? _cachedProgressBarClass : CalculateProgressBarClass(GetProgressPercentage());
+    }
+
+    private string CalculateProgressBarClass(double percentage)
+    {
+        return percentage switch
+        {
+            >= 90 => "bg-danger",
+            >= 70 => "bg-warning",
+            _ => "bg-success"
+        };
+    }
+
+    private string GetCategoryBadgeClass()
+    {
+        if (!IsValid()) return "bg-secondary";
+        
+        return GetSafeCategory() switch
+        {
+            "Technology" => "bg-primary",
+            "Social" => "bg-success",
+            "Corporate" => "bg-info",
+            "Entertainment" => "bg-warning",
+            _ => "bg-secondary"
+        };
+    }
+
+    private string GetAvailabilityBadgeClass()
+    {
+        if (!IsValid()) return "bg-secondary";
+        
+        var spotsRemaining = Event.Capacity - Event.RegisteredAttendees;
+        return spotsRemaining switch
+        {
+            0 => "bg-danger",
+            <= 10 => "bg-warning",
+            _ => "bg-success"
+        };
+    }
+
+    private string GetAvailabilityText()
+    {
+        if (!IsValid()) return "N/A";
+        
+        var spotsRemaining = Event.Capacity - Event.RegisteredAttendees;
+        return spotsRemaining switch
+        {
+            0 => "Full",
+            <= 10 => $"{spotsRemaining} left",
+            _ => "Available"
+        };
+    }
+
+    private async Task OnViewDetails()
+    {
+        if (IsValid() && OnViewDetailsClicked.HasDelegate)
+        {
+            await OnViewDetailsClicked.InvokeAsync(Event.Id);
+        }
+    }
+}
